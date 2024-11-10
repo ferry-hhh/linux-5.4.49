@@ -612,7 +612,8 @@ static void __init numa_init_array(void)
 		if (early_cpu_to_node(i) != NUMA_NO_NODE)
 			continue;
 		numa_set_node(i, rr);
-		rr = next_node_in(rr, node_online_map);
+		// Do not create CPU for node1
+		// rr = next_node_in(rr, node_online_map);
 	}
 }
 
@@ -684,13 +685,37 @@ static int __init numa_init(int (*init_func)(void))
  */
 static int __init dummy_numa_init(void)
 {
+	int i;
+	u64 cxl_mem_start = e820_table->entries[e820_table->nr_entries-1].addr;
+	u64 cxl_mem_size = e820_table->entries[e820_table->nr_entries-1].size;
+	u64 cxl_mem_end = cxl_mem_start + cxl_mem_size;
+	u64 dram_start = 0;
+	u64 dram_end = 0;
 	printk(KERN_INFO "%s\n",
 	       numa_off ? "NUMA turned off" : "No NUMA configuration found");
 	printk(KERN_INFO "Faking a node at [mem %#018Lx-%#018Lx]\n",
 	       0LLU, PFN_PHYS(max_pfn) - 1);
 
+	for (i = 0; i < e820_table->nr_entries-1; i++) {
+		if (e820_table->entries[i].type == 1) {
+			u64 cur_usable_addr = e820_table->entries[i].addr + e820_table->entries[i].size;
+			if (cur_usable_addr > dram_end) {
+				dram_end = cur_usable_addr;
+			}
+		}
+	}
+
+	printk(KERN_INFO "cxl_mem_start=%#018Lx, cxl_mem_size=%#018Lx, cxl_mem_end=%#018Lx\n, dram_start=%#018Lx, dram_end=%#018Lx\n",
+		   cxl_mem_start, cxl_mem_size, cxl_mem_end, dram_start, dram_end);
+
+    // node_set(0, numa_nodes_parsed);
+    // numa_add_memblk(0, 0, PFN_PHYS(max_pfn));
+
 	node_set(0, numa_nodes_parsed);
-	numa_add_memblk(0, 0, PFN_PHYS(max_pfn));
+    numa_add_memblk(0, dram_start, dram_end);
+
+    node_set(1, numa_nodes_parsed);
+    numa_add_memblk(1, cxl_mem_start, cxl_mem_end);
 
 	return 0;
 }

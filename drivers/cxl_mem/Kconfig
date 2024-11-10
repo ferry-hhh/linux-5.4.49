@@ -1,0 +1,5 @@
+config CXL_MEM
+tristate "cxl_mem driver"
+help
+  A driver for cxl type3 device in gem5.
+default y
